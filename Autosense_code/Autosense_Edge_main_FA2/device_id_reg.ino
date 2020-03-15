@@ -10,6 +10,7 @@ void reg_screen()
     display.setCursor(5,30);
     display.println("Hold button A");
     display.display();  
+    Serial.println("in reg screen");
         
    }
 
@@ -17,18 +18,22 @@ void reg_screen()
 
 void device_id_reg()  
 {
-//    http.begin("http://13.233.19.179:9000/routers/device_registration");      //Specify request destination
-//    http.addHeader("Content-Type", "application/json");  //Specify content-type header     
-//    mac = WiFi.macAddress();
-    doc["mac_address"]= "AW:WD:EF:DE:ER:F1";
+    http.begin("http://"+readString(90)+"/routers/device_registration");      //Specify request destination
+    http.addHeader("Content-Type", "application/json");  //Specify content-type header     
+    mac = WiFi.macAddress();
+    doc["mac_address"]= mac;
      
    char macID[512];
    serializeJson(doc, macID);
    Serial.print("mac:");
    Serial.println(macID);
     int httpCode = http.POST(macID);   //Send the request
-    //String payload = http.getString();                  //Get the response payload     
-    String payload = macID;
+    String payload = http.getString();                  //Get the response payload     
+    //String payload = macID;
+    Serial.print("HTTP code: ");
+    Serial.println(httpCode);
+    Serial.print("Payload: ");
+    Serial.println(payload);
     void clear();
      DynamicJsonDocument doc(4096);
     DeserializationError error = deserializeJson(doc, payload);
@@ -50,7 +55,7 @@ void device_id_reg()
           String id = device_id;
         //  Save string to flash memory (EEPROM library). Comment this line after the first run.
           Serial.print("Writing string: ");
-          String input_string = "1";
+          String input_string = id;
           Serial.println(input_string);
           writeString(input_string,0);
           delay(2000);
@@ -60,7 +65,6 @@ void device_id_reg()
    
 }
 
-// Set 'pos' parameter to specify begin position of the string in memory 
 void writeString(String str,int pos){
   for (int i=0; i<str.length(); i++) {
     int s = str[i];
@@ -71,7 +75,6 @@ void writeString(String str,int pos){
 }
 
 //Reading device id from EEPROM
-// Set 'pos' parameter to specify begin position of the string in memory
 String readString(int pos){
   char data[100]; // Max 100 Bytes
   int len = 0;
@@ -81,6 +84,6 @@ String readString(int pos){
     data[len] = k;
     len++;
   }  
-  return String(data);
+   return data;
   
 }

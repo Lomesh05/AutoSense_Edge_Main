@@ -12,7 +12,6 @@ void reg_screen()
     display.display();  
         
    }
-
 }
 
 void device_id_reg()  
@@ -50,12 +49,11 @@ void device_id_reg()
           String id = device_id;
         //  Save string to flash memory (EEPROM library). Comment this line after the first run.
           Serial.print("Writing string: ");
-          String input_string = "1";
+          String input_string = "1234";
           Serial.println(input_string);
           writeString(input_string,0);
           delay(2000);
           http.end();  //Close connection
-          buff_var[0] == 0;
       }
    
 }
@@ -81,6 +79,7 @@ String readString(int pos){
     data[len] = k;
     len++;
   }  
-  return String(data);
+    if(pos == NULL)
+      return String(data);
   
 }

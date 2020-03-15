@@ -6,6 +6,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <ESP8266HTTPClient.h>
+#include <ESP8266WebServer.h>
 #include <SoftwareSerial.h>
 #include <Wire.h>
 #include <Keypad.h>
@@ -23,7 +24,7 @@
 #define OLED_RESET LED_BUILTIN // Reset pin # (or -1 if sharing Arduino reset pin)
 #define DATA_OFFSET 10
 
-enum state_names{ REG_SCREEN, DEVICE_ID, MQTT, DRIVE_ID, RE_REG_SCREEN, CLEAR, Start_Trip_Call, FLASH_E};
+enum state_names{ REG_SCREEN, DEVICE_ID, MQTT, DRIVE_ID, RE_REG_SCREEN, CLEAR, Start_Trip_Call, FLASH_E, NO_STATE};
 
 const byte ROWS = 4; //four rows of Keypad
 const byte COLS = 4; //three columns of Keypad
@@ -59,16 +60,26 @@ void device_id_reg();
 void re_reg_screen();
 bool start_trip_call(String driver_id);
 bool end_trip_call();
+//Function Decalration
+bool testWifi(void);
+void launchWeb(void);
+void setupAP(void);
+
 
 String mac;           //MAC address
 int pos;              //Position of writing and reading string
-int buff_var[2] = {0, 0}; //state variable to changes the states
+int buff_var[3] = {0, 0, 0}; //state variable to changes the states
 String pin = "1234";  //flash erasing pin
 
 double gps_speed;
-int state = DRIVE_ID;
+int state;
 int count =0;
+int cnt = 0;
 const long interval = 1000;
+int i = 0;
+int statusCode;
+String content;
+
 
 
 // Objects Defs
@@ -81,9 +92,8 @@ PubSubClient client(mqtt_server, 1883, espClient);
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET); // oled objcet
 Keypad_I2C keypad = Keypad_I2C( makeKeymap(keys), rowPins, colPins, ROWS, COLS, I2CADDR);
 EEPROM_Rotate EEPROMr; ////Library for writing data into the flash memory
+ESP8266WebServer server(80);
 
-
- static long currentMillis = millis();
 void setup()
 {
   
@@ -94,27 +104,33 @@ void setup()
   EEPROMr.begin(4096);
   keypad.begin( );
   keypad.addEventListener(keypadEvent);
+  Serial.println("in void set up");
+  
 
   if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR))
   {
     for (;;);
   }
   ;
+  display.clearDisplay();
   setup_wifi();
+
+  Serial.println("after setup_wifi");
 
   // MQTT Server Connection
   if (!client.connected())
   {
     reconnect();
   }
-  
+  Serial.print("EEPROM read:");
+Serial.println(EEPROMr.read(0));
   OLED_param();
-   if(char(EEPROMr.read(DATA_OFFSET) == NULL))
+   if(EEPROMr.read(DATA_OFFSET) == NULL)
     {
-       Serial.println("In initial state2");
        reg_screen();
     }
- // gps_lock();
+ nmea_message_disabler();
+  //gps_lock();
  
 }
 
@@ -122,20 +138,29 @@ void setup()
 void loop()
 {
   client.loop();
-  if(char(EEPROMr.read(DATA_OFFSET)) == NULL)
-      state = DEVICE_ID;
-   
-  else if(buff_var[0] == 1)
-      state = MQTT;
- 
-  else if(buff_var[1] == 1)
-      state = RE_REG_SCREEN;
- 
-  else if(buff_var[1] == 2)
-      state = FLASH_E;
- 
-  else if(buff_var[0] == 0)
+if(EEPROMr.read(DATA_OFFSET) != NULL)
+  { 
+   if(buff_var[0] == 0)
+   {
       state = DRIVE_ID;
+      Serial.println("else if void drive");
+   }
+  else if(buff_var[1] == 1)
+  {
+      state = FLASH_E;
+      Serial.println("in else if flashe e loop");
+  } 
+  else if(buff_var[0] == 1)
+  {
+       state = MQTT; 
+  }
+  else if(buff_var[0] == 2)
+  {
+       state = NO_STATE;
+       Serial.println("in NO_STATE");
+       display.clearDisplay();
+  }
+}
       
   char key = keypad.getKey();
   state_case(state, key);
@@ -167,17 +192,35 @@ void keypadEvent(KeypadEvent key)
               switch (key)
                      {
                       case 'A':
-                              buff_var[1] = 2;
-                              clearAll();      
+                            if(buff_var[0] == 2)
+                            {
+                              display.clearDisplay();
+                              buff_var[1] = 1;
+                              buff_var[0]++;
+                              Serial.print("buff_var[0]");
+                              Serial.println(buff_var[0]); 
+                            }  
                               break;        
-                      case 'B':  
+                      case 'B':
+                            if(buff_var[0] == 2)
+                            {
+                              buff_var[0] = 0;
+                              display.clearDisplay();
+                              Serial.println("in press B event");
+                            }
                               break;
 
                       case 'C':
+                            if(state == DRIVE_ID || state == FLASH_E)
+                            {
                               state = CLEAR;
+                            }
                               break;
                       case 'D':
+                            if(state == DRIVE_ID)
+                            {
                               state = Start_Trip_Call;
+                            }
                               break;
                      }
              break;
@@ -187,12 +230,19 @@ void keypadEvent(KeypadEvent key)
       switch (key)
       {
           case 'A':
-                   if(char(EEPROMr.read(DATA_OFFSET)) == NULL)
+                   if(EEPROMr.read(DATA_OFFSET) == NULL)
                         device_id_reg();
                    break;      
          case 'B':
+                    buff_var[1] = 0;
+                    display.clearDisplay();
+                    display.display();
                     re_reg_screen();
-                    buff_var[1] == 1;
+                    
+                    buff_var[0] = 2; // to avoid press event of B
+                    Serial.print("buff_var[0]: ");
+                    Serial.println(buff_var[0]);
+                   // delay(2000);                    
                     break;
 
          case '#':
@@ -228,13 +278,6 @@ void clear_buff()
   display.display();
 }
 
-void clearAll()
-{
- display.clearDisplay(); 
- display.display();
- delay(200);
-}
-
 void start_trip()
 {
    if (buff_string.length() == max_len)
@@ -253,7 +296,7 @@ void start_trip()
               display.display();
               delay(1000);
               buff_var[0] = 1;
-             // display.clearDisplay();
+              display.clearDisplay();
             }
             else
             {
@@ -282,7 +325,7 @@ void start_trip()
 
 void end_trip()
 {
-            if (end_trip_call())
+            if(end_trip_call())
             {
               display.clearDisplay();
               display.setCursor(6, 15);
@@ -304,5 +347,7 @@ void end_trip()
               display.clearDisplay();
               display.display();
             }
+            display.clearDisplay();
+            display.display();
           
 }

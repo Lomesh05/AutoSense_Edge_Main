@@ -10,6 +10,7 @@ void reg_screen()
     display.setCursor(5,30);
     display.println("Hold button A");
     display.display();  
+    Serial.println("in reg screen");
         
    }
 
@@ -60,7 +61,6 @@ void device_id_reg()
    
 }
 
-// Set 'pos' parameter to specify begin position of the string in memory 
 void writeString(String str,int pos){
   for (int i=0; i<str.length(); i++) {
     int s = str[i];
@@ -71,7 +71,6 @@ void writeString(String str,int pos){
 }
 
 //Reading device id from EEPROM
-// Set 'pos' parameter to specify begin position of the string in memory
 String readString(int pos){
   char data[100]; // Max 100 Bytes
   int len = 0;
@@ -81,6 +80,6 @@ String readString(int pos){
     data[len] = k;
     len++;
   }  
-  return String(data);
+   return String(data);
   
 }
